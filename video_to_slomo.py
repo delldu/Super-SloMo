@@ -11,6 +11,7 @@ import model
 import dataloader
 import platform
 from tqdm import tqdm
+from apex import amp
 
 # For parsing commandline arguments
 parser = argparse.ArgumentParser()
@@ -149,10 +150,13 @@ def main():
 
     flowBackWarp = model.backWarp(videoFrames.dim[0], videoFrames.dim[1], device)
     flowBackWarp = flowBackWarp.to(device)
+    flowBackWarp = amp.initialize(flowBackWarp, opt_level= "O1")
 
     dict1 = torch.load(args.checkpoint, map_location='cpu')
     ArbTimeFlowIntrp.load_state_dict(dict1['state_dictAT'])
     flowComp.load_state_dict(dict1['state_dictFC'])
+
+    flowComp = amp.initialize(flowComp, opt_level= "O1")
 
     # Interpolate frames
     frameCounter = 1
@@ -198,10 +202,19 @@ def main():
 
                 Ft_p = (wCoeff[0] * V_t_0 * g_I0_F_t_0_f + wCoeff[1] * V_t_1 * g_I1_F_t_1_f) / (wCoeff[0] * V_t_0 + wCoeff[1] * V_t_1)
 
+                del g_I0_F_t_0_f, g_I1_F_t_1_f, F_t_0_f, F_t_1_f, F_t_0, F_t_1, intrpOut, V_t_0, V_t_1, wCoeff
+                torch.cuda.empty_cache()
+
                 # Save intermediate frame
                 for batchIndex in range(args.batch_size):
                     (TP(Ft_p[batchIndex].cpu().detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, str(frameCounter + args.sf * batchIndex) + ".png"))
+                del Ft_p
+                torch.cuda.empty_cache()
+
                 frameCounter += 1
+
+            del F_0_1, F_1_0, flowOut, I0, I1, frame0, frame1
+            torch.cuda.empty_cache()
 
             # Set counter accounting for batching of frames
             frameCounter += args.sf * (args.batch_size - 1)
