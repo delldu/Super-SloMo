@@ -24,6 +24,9 @@ parser.add_argument("--batch_size", type=int, default=1, help='Specify batch siz
 parser.add_argument("--output", type=str, default="output.mkv", help='Specify output file name. Default: output.mp4')
 args = parser.parse_args()
 
+# python video_to_slomo.py --checkpoint models/SuperSloMo.ckpt --sf 4 --video /tmp/a.mp4 --output /tmp/b.mkv
+
+
 def check():
     """
     Checks the validity of commandline arguments.
@@ -92,18 +95,11 @@ def main():
         exit(1)
 
     # Create extraction folder and extract frames
-    IS_WINDOWS = 'Windows' == platform.system()
-    extractionDir = "tmpSuperSloMo"
-    if not IS_WINDOWS:
-        # Assuming UNIX-like system where "." indicates hidden directories
-        extractionDir = "." + extractionDir
+    # Assuming UNIX-like system where "." indicates hidden directories
+    extractionDir = ".tmpSuperSloMo"
     if os.path.isdir(extractionDir):
         rmtree(extractionDir)
     os.mkdir(extractionDir)
-    if IS_WINDOWS:
-        FILE_ATTRIBUTE_HIDDEN = 0x02
-        # ctypes.windll only exists on Windows
-        ctypes.windll.kernel32.SetFileAttributesW(extractionDir, FILE_ATTRIBUTE_HIDDEN)
 
     extractionPath = os.path.join(extractionDir, "input")
     outputPath     = os.path.join(extractionDir, "output")
@@ -139,10 +135,12 @@ def main():
     videoFramesloader = torch.utils.data.DataLoader(videoFrames, batch_size=args.batch_size, shuffle=False)
 
     # Initialize model
+    # UNet(inChannels, outChannels)
     flowComp = model.UNet(6, 4)
     flowComp.to(device)
     for param in flowComp.parameters():
         param.requires_grad = False
+
     ArbTimeFlowIntrp = model.UNet(20, 5)
     ArbTimeFlowIntrp.to(device)
     for param in ArbTimeFlowIntrp.parameters():
@@ -156,6 +154,7 @@ def main():
     ArbTimeFlowIntrp.load_state_dict(dict1['state_dictAT'])
     flowComp.load_state_dict(dict1['state_dictFC'])
 
+    ArbTimeFlowIntrp = amp.initialize(ArbTimeFlowIntrp, opt_level= "O1")
     flowComp = amp.initialize(flowComp, opt_level= "O1")
 
     # Interpolate frames

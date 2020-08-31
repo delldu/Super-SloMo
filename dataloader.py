@@ -280,7 +280,8 @@ class SuperSloMo(data.Dataset):
         tmp = '    Transforms (if any): '
         fmt_str += '{0}{1}\n'.format(tmp, self.transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
-    
+
+# xxxx3333    
 class UCI101Test(data.Dataset):
     """
     A dataloader for loading N samples arranged in this way:
