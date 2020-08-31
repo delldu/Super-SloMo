@@ -5,7 +5,7 @@ import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+import pdb
 
 class down(nn.Module):
     """
@@ -249,6 +249,35 @@ class backWarp(nn.Module):
         self.H = H
         self.gridX = torch.tensor(gridX, requires_grad=False, device=device)
         self.gridY = torch.tensor(gridY, requires_grad=False, device=device)
+
+        # pdb.set_trace()
+        # (Pdb) a
+        # self = backWarp()
+        # W = 960
+        # H = 512
+        # device = device(type='cuda', index=0)
+        # (Pdb) pp self.gridX.size()
+        # torch.Size([512, 960])
+        # (Pdb) pp self.gridX
+        # tensor([[  0,   1,   2,  ..., 957, 958, 959],
+        #         [  0,   1,   2,  ..., 957, 958, 959],
+        #         [  0,   1,   2,  ..., 957, 958, 959],
+        #         ...,
+        #         [  0,   1,   2,  ..., 957, 958, 959],
+        #         [  0,   1,   2,  ..., 957, 958, 959],
+        #         [  0,   1,   2,  ..., 957, 958, 959]], device='cuda:0')
+
+        # (Pdb) pp self.gridY.size()
+        # torch.Size([512, 960])
+        # (Pdb) pp self.gridY
+        # tensor([[  0,   0,   0,  ...,   0,   0,   0],
+        #         [  1,   1,   1,  ...,   1,   1,   1],
+        #         [  2,   2,   2,  ...,   2,   2,   2],
+        #         ...,
+        #         [509, 509, 509,  ..., 509, 509, 509],
+        #         [510, 510, 510,  ..., 510, 510, 510],
+        #         [511, 511, 511,  ..., 511, 511, 511]], device='cuda:0')
+
         
     def forward(self, img, flow):
         """
@@ -282,6 +311,11 @@ class backWarp(nn.Module):
         grid = torch.stack((x,y), dim=3)
         # Sample pixels using bilinear interpolation.
         imgOut = torch.nn.functional.grid_sample(img, grid)
+
+        # pdb.set_trace()
+        #  pp imgOut.size()
+        # torch.Size([1, 3, 512, 960])
+
         return imgOut
 
 
@@ -323,6 +357,9 @@ def getFlowCoeff (indices, device):
     C11 = C00 = - (1 - (t[ind])) * (t[ind])
     C01 = (t[ind]) * (t[ind])
     C10 = (1 - (t[ind])) * (1 - (t[ind]))
+
+    pdb.set_trace()
+
     return torch.Tensor(C00)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C01)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C10)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C11)[None, None, None, :].permute(3, 0, 1, 2).to(device)
 
 def getWarpCoeff (indices, device):

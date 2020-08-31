@@ -3,7 +3,7 @@ from PIL import Image
 import os
 import os.path
 import random
-
+import pdb
 
 def _make_dataset(dir):
     """
@@ -40,6 +40,9 @@ def _make_dataset(dir):
         for image in sorted(os.listdir(clipsFolderPath)):
             # Add path to list.
             framesPath[index].append(os.path.join(clipsFolderPath, image))
+
+    pdb.set_trace()
+
     return framesPath
 
 def _make_video_dataset(dir):
@@ -66,6 +69,9 @@ def _make_video_dataset(dir):
     for image in sorted(os.listdir(dir)):
         # Add path to list.
         framesPath.append(os.path.join(dir, image))
+
+    # pdb.set_trace()
+
     return framesPath
 
 def _pil_loader(path, cropArea=None, resizeDim=None, frameFlip=0):
@@ -463,6 +469,10 @@ class Video(data.Dataset):
         frame        = _pil_loader(framesPath[0])
         self.origDim = frame.size
         self.dim     = int(self.origDim[0] / 32) * 32, int(self.origDim[1] / 32) * 32
+        # (Pdb) pp frame.size
+        # (960, 540)
+        # (Pdb) pp self.dim
+        # (960, 512)
 
         # Raise error if no images found in root.
         if len(framesPath) == 0:
@@ -471,6 +481,17 @@ class Video(data.Dataset):
         self.root           = root
         self.framesPath     = framesPath
         self.transform      = transform
+
+        # pdb.set_trace()
+        # (Pdb) pp self
+        # Dataset Video
+        #     Number of datapoints: 99
+        #     Root Location: .tmpSuperSloMo/input
+        #     Transforms (if any): Compose(
+        #                              ToTensor()
+        #                              Normalize(mean=[0.429, 0.431, 0.397], std=[1, 1, 1])
+        #                          )
+
 
     def __getitem__(self, index):
         """
@@ -500,6 +521,11 @@ class Video(data.Dataset):
             if self.transform is not None:
                 image = self.transform(image)
             sample.append(image)
+
+        # pdb.set_trace()
+        # (Pdb) pp len(sample), sample[0].size(), sample[1].size()
+        # (2, torch.Size([3, 512, 960]), torch.Size([3, 512, 960]))
+            
         return sample
 
 

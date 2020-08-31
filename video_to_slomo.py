@@ -13,6 +13,8 @@ import platform
 from tqdm import tqdm
 from apex import amp
 
+import pdb
+
 # For parsing commandline arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("--ffmpeg_dir", type=str, default="", help='path to ffmpeg.exe')
@@ -20,7 +22,6 @@ parser.add_argument("--video", type=str, required=True, help='path of video to b
 parser.add_argument("--checkpoint", type=str, required=True, help='path of checkpoint for pretrained model')
 parser.add_argument("--fps", type=float, default=30, help='specify fps of output video. Default: 30.')
 parser.add_argument("--sf", type=int, required=True, help='specify the slomo factor N. This will increase the frames by Nx. Example sf=2 ==> 2x frames')
-parser.add_argument("--batch_size", type=int, default=1, help='Specify batch size for faster conversion. This will depend on your cpu/gpu memory. Default: 1')
 parser.add_argument("--output", type=str, default="output.mkv", help='Specify output file name. Default: output.mp4')
 args = parser.parse_args()
 
@@ -45,8 +46,6 @@ def check():
     error = ""
     if (args.sf < 2):
         error = "Error: --sf/slomo factor has to be atleast 2"
-    if (args.batch_size < 1):
-        error = "Error: --batch_size has to be atleast 1"
     if (args.fps < 1):
         error = "Error: --fps has to be atleast 1"
     if ".mkv" not in args.output:
@@ -132,7 +131,9 @@ def main():
 
     # Load data
     videoFrames = dataloader.Video(root=extractionPath, transform=transform)
-    videoFramesloader = torch.utils.data.DataLoader(videoFrames, batch_size=args.batch_size, shuffle=False)
+    # pdb.set_trace()
+
+    videoFramesloader = torch.utils.data.DataLoader(videoFrames, batch_size=1, shuffle=False)
 
     # Initialize model
     # UNet(inChannels, outChannels)
@@ -169,17 +170,38 @@ def main():
             flowOut = flowComp(torch.cat((I0, I1), dim=1))
             F_0_1 = flowOut[:,:2,:,:]
             F_1_0 = flowOut[:,2:,:,:]
+            # (Pdb) pp flowOut.size()
+            # torch.Size([1, 4, 512, 960])
+            # (Pdb) pp F_0_1.size()
+            # torch.Size([1, 2, 512, 960])
+            # (Pdb) pp F_1_0.size()
+            # torch.Size([1, 2, 512, 960])
+
+            # pdb.set_trace()
+            # (Pdb) pp I0.size(), I1.size()
+            # (torch.Size([1, 3, 512, 960]), torch.Size([1, 3, 512, 960]))
+            # (Pdb) pp torch.cat((I0, I1), dim=1).size()
+            # torch.Size([1, 6, 512, 960])
 
             # Save reference frames in output folder
-            for batchIndex in range(args.batch_size):
-                (TP(frame0[batchIndex].detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, str(frameCounter + args.sf * batchIndex) + ".png"))
+            (TP(frame0[0].detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, str(frameCounter) + ".png"))
             frameCounter += 1
 
             # Generate intermediate frames
+            # (Pdb) for i in range(1, args.sf): print(i)
+            # 1
+            # 2
+            # 3
             for intermediateIndex in range(1, args.sf):
                 t = float(intermediateIndex) / args.sf
                 temp = -t * (1 - t)
                 fCoeff = [temp, t * t, (1 - t) * (1 - t), temp]
+
+                # pdb.set_trace()
+                # (Pdb) pp temp
+                # -0.1875
+                # (Pdb) pp fCoeff
+                # [-0.1875, 0.0625, 0.5625, -0.1875]
 
                 F_t_0 = fCoeff[0] * F_0_1 + fCoeff[1] * F_1_0
                 F_t_1 = fCoeff[2] * F_0_1 + fCoeff[3] * F_1_0
@@ -191,11 +213,18 @@ def main():
 
                 F_t_0_f = intrpOut[:, :2, :, :] + F_t_0
                 F_t_1_f = intrpOut[:, 2:4, :, :] + F_t_1
+
+                # pdb.set_trace()
+                # (Pdb) intrpOut.size()
+                # torch.Size([1, 5, 512, 960])
+
                 V_t_0   = torch.sigmoid(intrpOut[:, 4:5, :, :])
                 V_t_1   = 1 - V_t_0
 
                 g_I0_F_t_0_f = flowBackWarp(I0, F_t_0_f)
                 g_I1_F_t_1_f = flowBackWarp(I1, F_t_1_f)
+
+                # pdb.set_trace()
 
                 wCoeff = [1 - t, t]
 
@@ -205,8 +234,7 @@ def main():
                 torch.cuda.empty_cache()
 
                 # Save intermediate frame
-                for batchIndex in range(args.batch_size):
-                    (TP(Ft_p[batchIndex].cpu().detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, str(frameCounter + args.sf * batchIndex) + ".png"))
+                (TP(Ft_p[0].cpu().detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, str(frameCounter) + ".png"))
                 del Ft_p
                 torch.cuda.empty_cache()
 
@@ -214,9 +242,6 @@ def main():
 
             del F_0_1, F_1_0, flowOut, I0, I1, frame0, frame1
             torch.cuda.empty_cache()
-
-            # Set counter accounting for batching of frames
-            frameCounter += args.sf * (args.batch_size - 1)
 
     # Generate video from interpolated frames
     create_video(outputPath)
