@@ -174,7 +174,6 @@ def train_data(bs):
     print(train_ds)
 
     # Split train_ds in train and valid set
-    # xxxx--modify here
     valid_len = int(0.2 * len(train_ds))
     indices = [i for i in range(len(train_ds) - valid_len, len(train_ds))]
 

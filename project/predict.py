@@ -36,22 +36,34 @@ if __name__ == "__main__":
     # CPU or GPU ?
     device = torch.device(os.environ["DEVICE"])
 
-    model = get_model("FC")
-    model_load(model, "FC", args.checkpoint)
-    model.to(device)
-    model.eval()
+    # Flow compute
+    flow_compute = get_model("FC")
+    model_load(flow_compute, "FC", args.checkpoint)
+    flow_compute.to(device)
+    flow_compute.eval()
 
-    if os.environ["ENABLE_APEX"] == "YES":
-        from apex import amp
-        model = amp.initialize(model, opt_level="O1")
+    # Flow interpolate
+    flow_interpolate = get_model("AT")
+    model_load(flow_interpolate, "AT", args.checkpoint)
+    flow_interpolate.to(device)
+    flow_interpolate.eval()
+
+    # if os.environ["ENABLE_APEX"] == "YES":
+    #     from apex import amp
+    #     model = amp.initialize(model, opt_level="O1")
 
     totensor = get_transform(train=False)
     toimage = reverse_transform()
 
     video = Video()
     video.reset(args.input)
-    progress_bar = tqdm(total=len(video))
 
+    # Flow backwarp
+    flow_backwarp = get_model("Backwarp: {:4d}x{:4d}".format(video.height, video.width))
+    flow_backwarp.to(device)
+    flow_backwarp.eval()
+
+    progress_bar = tqdm(total=len(video))
     for index in range(len(video)):
         progress_bar.update(1)
 

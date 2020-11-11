@@ -178,6 +178,7 @@ def main():
 
             I0 = frame0.to(device)
             I1 = frame1.to(device)
+            pdb.set_trace()
 
             flowOut = flowComp(torch.cat((I0, I1), dim=1))
             F_0_1 = flowOut[:,:2,:,:]
@@ -196,7 +197,8 @@ def main():
             # torch.Size([1, 6, 512, 960])
 
             # Save reference frames in output folder
-            (TP(frame0[0].detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, "{:06d}.png".format(frameCounter)))
+            (TP(frame0[0].detach())).resize(videoFrames.origDim, Image.BILINEAR).save(\
+                os.path.join(outputPath, "{:06d}.png".format(frameCounter)))
             frameCounter += 1
 
             # Generate intermediate frames

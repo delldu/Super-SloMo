@@ -123,6 +123,7 @@ class backWarp(nn.Module):
     Given optical flow from frame I0 to I1 --> F_0_1 and frame I1, 
     it generates I0 <-- backwarp(F_0_1, I1).
     """
+
     def __init__(self, W, H, device):
         super(backWarp, self).__init__()
         # create a grid
@@ -203,6 +204,7 @@ class backWarp(nn.Module):
 # reference frames I0 and I1.
 t = torch.linspace(0.125, 0.875, 7)
 
+
 def getFlowCoeff(indices, device):
     """
     Gets flow coefficients used for calculating intermediate optical
@@ -232,8 +234,11 @@ def getFlowCoeff(indices, device):
     C01 = (t[ind]) * (t[ind])
     C10 = (1 - (t[ind])) * (1 - (t[ind]))
 
-    return torch.Tensor(C00)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C01)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C10)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C11)[None, None, None, :].permute(3, 0, 1, 2).to(device)
-
+    return \
+        torch.Tensor(C00)[None, None, None, :].permute(3, 0, 1, 2).to(device), \
+        torch.Tensor(C01)[None, None, None, :].permute(3, 0, 1, 2).to(device), \
+        torch.Tensor(C10)[None, None, None, :].permute(3, 0, 1, 2).to(device), \
+        torch.Tensor(C11)[None, None, None, :].permute(3, 0, 1, 2).to(device)
 
 def getWarpCoeff(indices, device):
     """
@@ -262,7 +267,8 @@ def getWarpCoeff(indices, device):
     ind = indices.detach().numpy()
     C0 = 1 - t[ind]
     C1 = t[ind]
-    return torch.Tensor(C0)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C1)[None, None, None, :].permute(3, 0, 1, 2).to(device)
+    return torch.Tensor(C0)[None, None, None, :].permute(3, 0, 1, 2).to(device), \
+        torch.Tensor(C1)[None, None, None, :].permute(3, 0, 1, 2).to(device)
 
 
 def model_load(model, subname, path):
@@ -344,8 +350,9 @@ def get_model(subname):
         # backWarp, subname like 'backWarp: HxW'
         a = subname.split(':')[1].split('x')
         H, W = int(a[0]), int(a[1])
-        model = backWarp(W, H)
+        model = backWarp(W, H, os.environ["DEVICE"])
     return model
+
 
 class Counter(object):
     """Class Counter."""
