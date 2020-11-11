@@ -19,6 +19,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from model import get_model, model_load, model_setenv
+from data import Video, get_transform, reverse_transform
 
 if __name__ == "__main__":
     """Predict."""
@@ -27,15 +28,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint', type=str,
-                        default="output/VideoSlow.pth", help="checkpint file")
-    parser.add_argument('--input', type=str, required=True, help="input image")
+                        default="models/VideoSlow.pth", help="checkpint file")
+    parser.add_argument('--input', type=str, default="dataset/predict/input", help="input video folder")
+    parser.add_argument('--output', type=str, default="dataset/predict/output", help="output video folder")
     args = parser.parse_args()
 
     # CPU or GPU ?
     device = torch.device(os.environ["DEVICE"])
 
-    model = get_model()
-    model_load(model, args.checkpoint)
+    model = get_model("FC")
+    model_load(model, "FC", args.checkpoint)
     model.to(device)
     model.eval()
 
@@ -43,8 +45,8 @@ if __name__ == "__main__":
         from apex import amp
         model = amp.initialize(model, opt_level="O1")
 
-    totensor = transforms.ToTensor()
-    toimage = transforms.ToPILImage()
+    totensor = get_transform(train=False)
+    toimage = reverse_transform()
 
     video = Video()
     video.reset(args.input)
@@ -53,11 +55,13 @@ if __name__ == "__main__":
     for index in range(len(video)):
         progress_bar.update(1)
 
-        image = Image.open(filename).convert("RGB")
-        input_tensor = totensor(image).unsqueeze(0).to(device)
+        print(video[index].size())
 
-        with torch.no_grad():
-            output_tensor = model(input_tensor).clamp(0, 1.0).squeeze()
+        # image = Image.open(filename).convert("RGB")
+        # input_tensor = totensor(image).unsqueeze(0).to(device)
 
-        toimage(output_tensor.cpu()).save(
-            "{}/{:06d}.png".format(args.output, index + 1))
+        # with torch.no_grad():
+        #     output_tensor = model(input_tensor).clamp(0, 1.0).squeeze()
+
+        # toimage(output_tensor.cpu()).save(
+        #     "{}/{:06d}.png".format(args.output, index + 1))

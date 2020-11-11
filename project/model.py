@@ -12,32 +12,267 @@
 
 import math
 import os
+import pdb
 import sys
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import torchvision
+import torchvision.transforms as transforms
 from tqdm import tqdm
 
 
-class VideoSlowModel(nn.Module):
-    """VideoSlow Model."""
-
-    def __init__(self):
-        """Init model."""
-        super(VideoSlowModel, self).__init__()
+class down(nn.Module):
+    def __init__(self, inChannels, outChannels, filterSize):
+        """
+        Parameters
+        ----------
+            inChannels : int
+                number of input channels for the first convolutional layer.
+            outChannels : int
+                number of output channels for the first convolutional layer.
+                This is also used as input and output channels for the
+                second convolutional layer.
+            filterSize : int
+                filter size for the convolution filter. input N would create
+                a N x N filter.
+        """
+        super(down, self).__init__()
+        self.conv1 = nn.Conv2d(
+            inChannels,  outChannels, filterSize, stride=1, padding=int((filterSize - 1) / 2))
+        self.conv2 = nn.Conv2d(
+            outChannels, outChannels, filterSize, stride=1, padding=int((filterSize - 1) / 2))
 
     def forward(self, x):
-        """Forward."""
+        """ Forward. """
+        # Average pooling with kernel size 2 (2 x 2).
+        x = F.avg_pool2d(x, 2)
+        # Convolution + Leaky ReLU
+        x = F.leaky_relu(self.conv1(x), negative_slope=0.1)
+        # Convolution + Leaky ReLU
+        x = F.leaky_relu(self.conv2(x), negative_slope=0.1)
         return x
 
 
-def model_load(model, path):
+class up(nn.Module):
+    def __init__(self, inChannels, outChannels):
+        super(up, self).__init__()
+        # Initialize convolutional layers.
+        self.conv1 = nn.Conv2d(inChannels,  outChannels,
+                               3, stride=1, padding=1)
+        # (2 * outChannels) is used for accommodating skip connection.
+        self.conv2 = nn.Conv2d(
+            2 * outChannels, outChannels, 3, stride=1, padding=1)
+
+    def forward(self, x, skpCn):
+        """ Forward . """
+
+        # Bilinear interpolation with scaling 2.
+        x = F.interpolate(x, scale_factor=2, mode='bilinear')
+        # Convolution + Leaky ReLU
+        x = F.leaky_relu(self.conv1(x), negative_slope=0.1)
+        # Convolution + Leaky ReLU on (`x`, `skpCn`)
+        x = F.leaky_relu(self.conv2(torch.cat((x, skpCn), 1)),
+                         negative_slope=0.1)
+        return x
+
+
+class UNet(nn.Module):
+    def __init__(self, inChannels, outChannels):
+        super(UNet, self).__init__()
+        self.conv1 = nn.Conv2d(inChannels, 32, 7, stride=1, padding=3)
+        self.conv2 = nn.Conv2d(32, 32, 7, stride=1, padding=3)
+        self.down1 = down(32, 64, 5)
+        self.down2 = down(64, 128, 3)
+        self.down3 = down(128, 256, 3)
+        self.down4 = down(256, 512, 3)
+        self.down5 = down(512, 512, 3)
+        self.up1 = up(512, 512)
+        self.up2 = up(512, 256)
+        self.up3 = up(256, 128)
+        self.up4 = up(128, 64)
+        self.up5 = up(64, 32)
+        self.conv3 = nn.Conv2d(32, outChannels, 3, stride=1, padding=1)
+
+    def forward(self, x):
+        """ Forward."""
+        x = F.leaky_relu(self.conv1(x), negative_slope=0.1)
+        s1 = F.leaky_relu(self.conv2(x), negative_slope=0.1)
+        s2 = self.down1(s1)
+        s3 = self.down2(s2)
+        s4 = self.down3(s3)
+        s5 = self.down4(s4)
+        x = self.down5(s5)
+        x = self.up1(x, s5)
+        x = self.up2(x, s4)
+        x = self.up3(x, s3)
+        x = self.up4(x, s2)
+        x = self.up5(x, s1)
+        x = F.leaky_relu(self.conv3(x), negative_slope=0.1)
+        return x
+
+
+class backWarp(nn.Module):
+    """
+    A class for creating a backwarping object.
+
+    This is used for backwarping to an image:
+
+    Given optical flow from frame I0 to I1 --> F_0_1 and frame I1, 
+    it generates I0 <-- backwarp(F_0_1, I1).
+    """
+    def __init__(self, W, H, device):
+        super(backWarp, self).__init__()
+        # create a grid
+        # gridX, gridY = np.meshgrid(np.arange(W), np.arange(H))
+        # xxxx-????
+        gridX, gridY = torch.meshgrid(torch.arange(W), torch.arange(H))
+
+        self.W = W
+        self.H = H
+        self.gridX = torch.tensor(
+            gridX.t(), requires_grad=False, device=device)
+        self.gridY = torch.tensor(
+            gridY.t(), requires_grad=False, device=device)
+
+        # pdb.set_trace()
+        # W = 960
+        # H = 512
+        # (Pdb) pp self.gridX.size()
+        # torch.Size([512, 960])
+        # (Pdb) pp self.gridX
+        # tensor([[  0,   1,   2,  ..., 957, 958, 959],
+        #         [  0,   1,   2,  ..., 957, 958, 959],
+        #         [  0,   1,   2,  ..., 957, 958, 959],
+        #         ...,
+        #         [  0,   1,   2,  ..., 957, 958, 959],
+        #         [  0,   1,   2,  ..., 957, 958, 959],
+        #         [  0,   1,   2,  ..., 957, 958, 959]], device='cuda:0')
+
+        # (Pdb) pp self.gridY.size()
+        # torch.Size([512, 960])
+        # (Pdb) pp self.gridY
+        # tensor([[  0,   0,   0,  ...,   0,   0,   0],
+        #         [  1,   1,   1,  ...,   1,   1,   1],
+        #         [  2,   2,   2,  ...,   2,   2,   2],
+        #         ...,
+        #         [509, 509, 509,  ..., 509, 509, 509],
+        #         [510, 510, 510,  ..., 510, 510, 510],
+        #         [511, 511, 511,  ..., 511, 511, 511]], device='cuda:0')
+
+    def forward(self, img, flow):
+        """
+        Returns output tensor after passing input `img` and `flow` to the backwarping
+        block.
+        I0  = backwarp(I1, F_0_1)
+        Parameters
+        ----------
+            img : frame I1.
+            flow : optical flow from I0 and I1: F_0_1.
+        Returns
+            frame I0.
+        """
+
+        # Extract horizontal and vertical flows.
+        u = flow[:, 0, :, :]
+        v = flow[:, 1, :, :]
+        # (Pdb) flow.size()
+        # torch.Size([1, 2, 512, 960])
+        # pdb.set_trace()
+
+        x = self.gridX.unsqueeze(0).expand_as(u).float() + u
+        y = self.gridY.unsqueeze(0).expand_as(v).float() + v
+        # range -1 to 1
+        x = 2*(x/self.W - 0.5)
+        y = 2*(y/self.H - 0.5)
+        # stacking X and Y
+        grid = torch.stack((x, y), dim=3)
+        # Sample pixels using bilinear interpolation.
+        imgOut = torch.nn.functional.grid_sample(img, grid)
+
+        # pdb.set_trace()
+        #  pp imgOut.size()
+        # torch.Size([1, 3, 512, 960])
+
+        return imgOut
+
+
+# Creating an array of `t` values for the 7 intermediate frames between
+# reference frames I0 and I1.
+t = torch.linspace(0.125, 0.875, 7)
+
+def getFlowCoeff(indices, device):
+    """
+    Gets flow coefficients used for calculating intermediate optical
+    flows from optical flows between I0 and I1: F_0_1 and F_1_0.
+
+    F_t_0 = C00 x F_0_1 + C01 x F_1_0
+    F_t_1 = C10 x F_0_1 + C11 x F_1_0
+
+    where,
+    C00 = -(1 - t) x t
+    C01 = t x t
+    C10 = (1 - t) x (1 - t)
+    C11 = -t x (1 - t)
+
+    Parameters
+    ----------
+        indices : indices corresponding to the intermediate frame positions
+            of all samples in the batch.
+        device : computation device (cpu/cuda). 
+    Returns
+            coefficients C00, C01, C10, C11.
+    """
+
+    # Convert indices tensor to numpy array
+    ind = indices.detach().numpy()
+    C11 = C00 = - (1 - (t[ind])) * (t[ind])
+    C01 = (t[ind]) * (t[ind])
+    C10 = (1 - (t[ind])) * (1 - (t[ind]))
+
+    return torch.Tensor(C00)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C01)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C10)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C11)[None, None, None, :].permute(3, 0, 1, 2).to(device)
+
+
+def getWarpCoeff(indices, device):
+    """
+    Gets coefficients used for calculating final intermediate 
+    frame `It_gen` from backwarped images using flows F_t_0 and F_t_1.
+
+    It_gen = (C0 x V_t_0 x g_I_0_F_t_0 + C1 x V_t_1 x g_I_1_F_t_1) / (C0 x V_t_0 + C1 x V_t_1)
+
+    where,
+    C0 = 1 - t
+    C1 = t
+
+    V_t_0, V_t_1 --> visibility maps
+    g_I_0_F_t_0, g_I_1_F_t_1 --> backwarped intermediate frames
+
+    Parameters
+    ----------
+        indices : indices corresponding to the intermediate frame positions
+            of all samples in the batch.
+        device : computation device (cpu/cuda). 
+    Returns
+            coefficients C0 and C1.
+    """
+
+    # Convert indices tensor to numpy array
+    ind = indices.detach().numpy()
+    C0 = 1 - t[ind]
+    C1 = t[ind]
+    return torch.Tensor(C0)[None, None, None, :].permute(3, 0, 1, 2).to(device), torch.Tensor(C1)[None, None, None, :].permute(3, 0, 1, 2).to(device)
+
+
+def model_load(model, subname, path):
     """Load model."""
     if not os.path.exists(path):
         print("Model '{}' does not exist.".format(path))
         return
 
     state_dict = torch.load(path, map_location=lambda storage, loc: storage)
+    state_dict = state_dict["state_dict" + subname]
     target_state_dict = model.state_dict()
     for n, p in state_dict.items():
         if n in target_state_dict.keys():
@@ -96,11 +331,21 @@ def model_export():
     # python -c "import netron; netron.start('model.onnx')"
 
 
-def get_model():
+def get_model(subname):
     """Create model."""
-    model = VideoSlowModel()
-    return model
 
+    # Flow Computer
+    if subname == "FC":
+        model = UNet(6, 4)
+    elif subname == "AT":
+        # arbitary - time
+        model = UNet(20, 5)
+    else:
+        # backWarp, subname like 'backWarp: HxW'
+        a = subname.split(':')[1].split('x')
+        H, W = int(a[0]), int(a[1])
+        model = backWarp(W, H)
+    return model
 
 class Counter(object):
     """Class Counter."""

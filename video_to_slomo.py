@@ -96,18 +96,18 @@ def main():
     # Create extraction folder and extract frames
     # Assuming UNIX-like system where "." indicates hidden directories
     extractionDir = ".tmpSuperSloMo"
-    if os.path.isdir(extractionDir):
-        rmtree(extractionDir)
-    os.mkdir(extractionDir)
+    # if os.path.isdir(extractionDir):
+    #     rmtree(extractionDir)
+    # os.mkdir(extractionDir)
 
     extractionPath = os.path.join(extractionDir, "input")
     outputPath     = os.path.join(extractionDir, "output")
-    os.mkdir(extractionPath)
-    os.mkdir(outputPath)
-    error = extract_frames(args.video, extractionPath)
-    if error:
-        print(error)
-        exit(1)
+    # os.mkdir(extractionPath)
+    # os.mkdir(outputPath)
+    # error = extract_frames(args.video, extractionPath)
+    # if error:
+    #     print(error)
+    #     exit(1)
 
     # Initialize transforms
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -132,16 +132,22 @@ def main():
     # Load data
     videoFrames = dataloader.Video(root=extractionPath, transform=transform)
     # pdb.set_trace()
+    # len(videoFrames[0]) ==> 2
+    # (Pdb) videoFrames[0][0].size()
+    # torch.Size([3, 512, 960])
+
 
     videoFramesloader = torch.utils.data.DataLoader(videoFrames, batch_size=1, shuffle=False)
 
     # Initialize model
     # UNet(inChannels, outChannels)
+    # flow Computation !!!
     flowComp = model.UNet(6, 4)
     flowComp.to(device)
     for param in flowComp.parameters():
         param.requires_grad = False
 
+    # arbitary-time
     ArbTimeFlowIntrp = model.UNet(20, 5)
     ArbTimeFlowIntrp.to(device)
     for param in ArbTimeFlowIntrp.parameters():
@@ -150,8 +156,14 @@ def main():
     flowBackWarp = model.backWarp(videoFrames.dim[0], videoFrames.dim[1], device)
     flowBackWarp = flowBackWarp.to(device)
     flowBackWarp = amp.initialize(flowBackWarp, opt_level= "O1")
+    # pdb.set_trace()
+    # (Pdb) videoFrames.dim[0], videoFrames.dim[1]
+    # (960, 512)
 
     dict1 = torch.load(args.checkpoint, map_location='cpu')
+    # dict_keys(['Detail', 'epoch', 'timestamp', 'trainBatchSz', 'validationBatchSz', 
+    # 'learningRate', 'loss', 'valLoss', 'valPSNR', 'state_dictFC', 'state_dictAT'])
+
     ArbTimeFlowIntrp.load_state_dict(dict1['state_dictAT'])
     flowComp.load_state_dict(dict1['state_dictFC'])
 
@@ -184,7 +196,7 @@ def main():
             # torch.Size([1, 6, 512, 960])
 
             # Save reference frames in output folder
-            (TP(frame0[0].detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, str(frameCounter) + ".png"))
+            (TP(frame0[0].detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, "{:06d}.png".format(frameCounter)))
             frameCounter += 1
 
             # Generate intermediate frames
@@ -234,7 +246,7 @@ def main():
                 torch.cuda.empty_cache()
 
                 # Save intermediate frame
-                (TP(Ft_p[0].cpu().detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, str(frameCounter) + ".png"))
+                (TP(Ft_p[0].cpu().detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, "{:06d}.png".format(frameCounter)))
                 del Ft_p
                 torch.cuda.empty_cache()
 
@@ -244,10 +256,10 @@ def main():
             torch.cuda.empty_cache()
 
     # Generate video from interpolated frames
-    create_video(outputPath)
+    # create_video(outputPath)
 
     # Remove temporary files
-    rmtree(extractionDir)
+    # rmtree(extractionDir)
 
     exit(0)
 

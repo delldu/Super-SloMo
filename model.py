@@ -244,11 +244,14 @@ class backWarp(nn.Module):
 
         super(backWarp, self).__init__()
         # create a grid
-        gridX, gridY = np.meshgrid(np.arange(W), np.arange(H))
+        # gridX, gridY = np.meshgrid(np.arange(W), np.arange(H))
+        # xxxx-????
+        gridX, gridY = torch.meshgrid(torch.arange(W), torch.arange(H))
+
         self.W = W
         self.H = H
-        self.gridX = torch.tensor(gridX, requires_grad=False, device=device)
-        self.gridY = torch.tensor(gridY, requires_grad=False, device=device)
+        self.gridX = torch.tensor(gridX.t(), requires_grad=False, device=device)
+        self.gridY = torch.tensor(gridY.t(), requires_grad=False, device=device)
 
         # pdb.set_trace()
         # (Pdb) a
@@ -302,6 +305,10 @@ class backWarp(nn.Module):
         # Extract horizontal and vertical flows.
         u = flow[:, 0, :, :]
         v = flow[:, 1, :, :]
+        # (Pdb) flow.size()
+        # torch.Size([1, 2, 512, 960])
+        # pdb.set_trace()
+
         x = self.gridX.unsqueeze(0).expand_as(u).float() + u
         y = self.gridY.unsqueeze(0).expand_as(v).float() + v
         # range -1 to 1
@@ -321,7 +328,8 @@ class backWarp(nn.Module):
 
 # Creating an array of `t` values for the 7 intermediate frames between
 # reference frames I0 and I1. 
-t = np.linspace(0.125, 0.875, 7)
+# t = np.linspace(0.125, 0.875, 7)
+t = torch.linspace(0.125, 0.875, 7)
 
 def getFlowCoeff (indices, device):
     """

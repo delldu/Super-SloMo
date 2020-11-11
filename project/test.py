@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint', type=str,
-                        default="output/VideoSlow.pth", help="checkpoint file")
+                        default="models/VideoSlow.pth", help="checkpoint file")
     parser.add_argument('--bs', type=int, default=2, help="batch size")
     args = parser.parse_args()
 

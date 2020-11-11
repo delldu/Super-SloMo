@@ -29,7 +29,7 @@ if __name__ == "__main__":
     parser.add_argument('--outputdir', type=str,
                         default="output", help="output directory")
     parser.add_argument('--checkpoint', type=str,
-                        default="output/VideoSlow.pth", help="checkpoint file")
+                        default="models/VideoSlow.pth", help="checkpoint file")
     parser.add_argument('--bs', type=int, default=8, help="batch size")
     parser.add_argument('--lr', type=float, default=1e-4, help="learning rate")
     parser.add_argument('--epochs', type=int, default=10)
