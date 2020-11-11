@@ -10,12 +10,14 @@
 # ************************************************************************************/
 #
 
+import math
 import os
 import sys
-import math
+
 import torch
 import torch.nn as nn
 from tqdm import tqdm
+
 
 class VideoSlowModel(nn.Module):
     """VideoSlow Model."""
@@ -27,6 +29,7 @@ class VideoSlowModel(nn.Module):
     def forward(self, x):
         """Forward."""
         return x
+
 
 def model_load(model, path):
     """Load model."""
@@ -46,6 +49,7 @@ def model_load(model, path):
 def model_save(model, path):
     """Save model."""
     torch.save(model.state_dict(), path)
+
 
 def model_export():
     """Export model to onnx."""
@@ -67,15 +71,15 @@ def model_export():
     print("Export model ...")
     # xxxx--modify here
     dummy_input = torch.randn(1, 3, 512, 512)
-    input_names = [ "input" ]
-    output_names = [ "output" ]
+    input_names = ["input"]
+    output_names = ["output"]
     torch.onnx.export(model, dummy_input, onnx_file,
-                    input_names=input_names, 
-                    output_names=output_names,
-                    verbose=True,
-                    opset_version=11,
-                    keep_initializers_as_inputs=True,
-                    export_params=True)
+                      input_names=input_names,
+                      output_names=output_names,
+                      verbose=True,
+                      opset_version=11,
+                      keep_initializers_as_inputs=True,
+                      export_params=True)
 
     # 3. Optimize model
     print('Checking model ...')
@@ -83,7 +87,8 @@ def model_export():
     onnx.checker.check_model(model)
 
     print("Optimizing model ...")
-    passes = ["extract_constant_to_initializer", "eliminate_unused_initializer"]
+    passes = ["extract_constant_to_initializer",
+              "eliminate_unused_initializer"]
     optimized_model = optimizer.optimize(model, passes)
     onnx.save(optimized_model, onnx_file)
 
@@ -211,7 +216,6 @@ def model_setenv():
 
     if os.environ.get("DEVICE") != "YES" and os.environ.get("DEVICE") != "NO":
         os.environ["DEVICE"] = 'cuda' if torch.cuda.is_available() else 'cpu'
-
 
     # Is there GPU ?
     if not torch.cuda.is_available():
