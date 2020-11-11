@@ -133,14 +133,13 @@ class backWarp(nn.Module):
 
         self.W = W
         self.H = H
-        self.gridX = torch.tensor(
-            gridX.t(), requires_grad=False, device=device)
-        self.gridY = torch.tensor(
-            gridY.t(), requires_grad=False, device=device)
+        # self.gridX = torch.tensor(
+        #     gridX.t(), requires_grad=False, device=device)
+        # self.gridY = torch.tensor(
+        #     gridY.t(), requires_grad=False, device=device)
 
-        # pdb.set_trace()
-        # W = 960
-        # H = 512
+        self.gridX = gridX.t().to(device)
+        self.gridY = gridY.t().to(device)
         # (Pdb) pp self.gridX.size()
         # torch.Size([512, 960])
         # (Pdb) pp self.gridX
@@ -191,7 +190,7 @@ class backWarp(nn.Module):
         # stacking X and Y
         grid = torch.stack((x, y), dim=3)
         # Sample pixels using bilinear interpolation.
-        imgOut = torch.nn.functional.grid_sample(img, grid)
+        imgOut = torch.nn.functional.grid_sample(img, grid, align_corners=True)
 
         # pdb.set_trace()
         #  pp imgOut.size()

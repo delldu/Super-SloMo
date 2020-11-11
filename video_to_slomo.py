@@ -178,7 +178,8 @@ def main():
 
             I0 = frame0.to(device)
             I1 = frame1.to(device)
-            pdb.set_trace()
+            # pdb.set_trace()
+            # torch.Size([1, 3, 512, 960])
 
             flowOut = flowComp(torch.cat((I0, I1), dim=1))
             F_0_1 = flowOut[:,:2,:,:]
@@ -211,7 +212,7 @@ def main():
                 temp = -t * (1 - t)
                 fCoeff = [temp, t * t, (1 - t) * (1 - t), temp]
 
-                # pdb.set_trace()
+                pdb.set_trace()
                 # (Pdb) pp temp
                 # -0.1875
                 # (Pdb) pp fCoeff
@@ -223,10 +224,14 @@ def main():
                 g_I0_F_t_0 = flowBackWarp(I0, F_t_0)
                 g_I1_F_t_1 = flowBackWarp(I1, F_t_1)
 
-                intrpOut = ArbTimeFlowIntrp(torch.cat((I0, I1, F_0_1, F_1_0, F_t_1, F_t_0, g_I1_F_t_1, g_I0_F_t_0), dim=1))
+                intrpOut = ArbTimeFlowIntrp(\
+                    torch.cat((I0, I1, F_0_1, F_1_0, F_t_1, F_t_0, \
+                        g_I1_F_t_1, g_I0_F_t_0), \
+                    dim=1))
 
                 F_t_0_f = intrpOut[:, :2, :, :] + F_t_0
                 F_t_1_f = intrpOut[:, 2:4, :, :] + F_t_1
+                pdb.set_trace()
 
                 # pdb.set_trace()
                 # (Pdb) intrpOut.size()
@@ -246,6 +251,8 @@ def main():
 
                 del g_I0_F_t_0_f, g_I1_F_t_1_f, F_t_0_f, F_t_1_f, F_t_0, F_t_1, intrpOut, V_t_0, V_t_1, wCoeff
                 torch.cuda.empty_cache()
+
+                pdb.set_trace()
 
                 # Save intermediate frame
                 (TP(Ft_p[0].cpu().detach())).resize(videoFrames.origDim, Image.BILINEAR).save(os.path.join(outputPath, "{:06d}.png".format(frameCounter)))
