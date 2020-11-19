@@ -17,13 +17,11 @@ import torch
 import torch.optim as optim
 
 from data import get_data
-from model import (get_model, model_load, model_save, model_setenv,
+from model import (get_model, model_device, model_load, model_save,
                    train_epoch, valid_epoch)
 
 if __name__ == "__main__":
     """Trainning model."""
-
-    model_setenv()
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--outputdir', type=str,
@@ -39,12 +37,10 @@ if __name__ == "__main__":
     if not os.path.exists(args.outputdir):
         os.makedirs(args.outputdir)
 
-    # CPU or GPU ?
-    device = torch.device(os.environ["DEVICE"])
-
     # get model
     model = get_model()
     model_load(model, args.checkpoint)
+    device = model_device()
     model.to(device)
 
     # construct optimizer and learning rate scheduler,

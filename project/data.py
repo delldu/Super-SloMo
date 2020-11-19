@@ -11,6 +11,7 @@
 #
 
 import os
+import pdb
 
 import torch
 import torch.utils.data as data
@@ -18,12 +19,11 @@ import torchvision.transforms as T
 import torchvision.utils as utils
 from PIL import Image
 
-import pdb
-
 train_dataset_rootdir = "dataset/train/"
 test_dataset_rootdir = "dataset/test/"
 
-VIDEO_SEQUENCE_LENGTH = 2 # for Video Slow
+VIDEO_SEQUENCE_LENGTH = 2  # for Video Slow
+
 
 def get_transform(train=True):
     """Transform images."""
@@ -32,12 +32,13 @@ def get_transform(train=True):
     #     ts.append(T.RandomHorizontalFlip(0.5))
     mean = [0.429, 0.431, 0.397]
     std = [1, 1, 1]
-    normalize = T.Normalize(mean=mean,std=std)
+    normalize = T.Normalize(mean=mean, std=std)
     ts.append(T.ToTensor())
 
     ts.append(normalize)
 
     return T.Compose(ts)
+
 
 def reverse_transform():
     ts = []
@@ -47,8 +48,9 @@ def reverse_transform():
     ts.append(normalize)
 
     ts.append(T.ToPILImage())
-    
+
     return T.Compose(ts)
+
 
 def multiple_crop(data, mult=32, HWmax=[4096, 4096]):
     # crop image to a multiple
@@ -79,7 +81,7 @@ class Video(data.Dataset):
         self.images = list(sorted(os.listdir(root)))
 
         # Suppose the first image size is video frame size
-        if len(self.images) > 0: 
+        if len(self.images) > 0:
             filename = os.path.join(self.root, self.images[0])
             img = self.transforms(Image.open(filename).convert("RGB"))
             img = multiple_crop(img, mult=32)
@@ -216,6 +218,7 @@ def VideoSlowDatasetTest():
     vs.reset("dataset/predict/input")
     print("Video frame Size: HxW = {:3d} x {:3d}".format(vs.height, vs.width))
     print("First Frame Size:", vs[0].size())
+
 
 if __name__ == '__main__':
     VideoSlowDatasetTest()

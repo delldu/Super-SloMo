@@ -12,37 +12,35 @@
 import argparse
 import glob
 import os
+import pdb
 
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
 from tqdm import tqdm
 
-from model import get_model, model_load, model_setenv
 from data import Video, get_transform, reverse_transform
-
-import pdb
+from model import enable_amp, get_model, model_device, model_load
 
 if __name__ == "__main__":
     """Predict."""
 
-    model_setenv()
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint', type=str,
                         default="models/VideoSlow.pth", help="checkpint file")
-    parser.add_argument('--input', type=str, default="dataset/predict/input", help="input video folder")
-    parser.add_argument('--output', type=str, default="dataset/predict/output", help="output video folder")
-    parser.add_argument("--scale", type=int, default=3, help='Increase the frames by Nx. Example scale=2 ==> 2x frames')
+    parser.add_argument(
+        '--input', type=str, default="dataset/predict/input", help="input video folder")
+    parser.add_argument(
+        '--output', type=str, default="dataset/predict/output", help="output video folder")
+    parser.add_argument("--scale", type=int, default=4,
+                        help='Increase the frames by Nx. Example scale=2 ==> 2x frames')
 
     args = parser.parse_args()
-
-    # CPU or GPU ?
-    device = torch.device(os.environ["DEVICE"])
 
     # Flow compute
     flow_compute = get_model("FC")
     model_load(flow_compute, "FC", args.checkpoint)
+    device = model_device()
     flow_compute.to(device)
     flow_compute.eval()
 
@@ -63,7 +61,8 @@ if __name__ == "__main__":
     video.reset(args.input)
 
     # Flow backwarp
-    flow_backwarp = get_model("Backwarp: {:4d}x{:4d}".format(video.height, video.width))
+    flow_backwarp = get_model(
+        "Backwarp: {:4d}x{:4d}".format(video.height, video.width))
     flow_backwarp.to(device)
     flow_backwarp.eval()
 
@@ -78,16 +77,17 @@ if __name__ == "__main__":
         frame1 = frames[1].view(1, -1, video.height, video.width)
 
         # Save orignal frame
-        toimage(frame0.squeeze()).save("{}/{:06d}.png".format(args.output, count))
+        toimage(frame0.squeeze()).save(
+            "{}/{:06d}.png".format(args.output, count))
         count += 1
 
         I0 = frame0.to(device)
-        I1 = frame1.to(device)        
+        I1 = frame1.to(device)
 
         with torch.no_grad():
             flowOut = flow_compute(torch.cat((I0, I1), dim=1))
-        F_0_1 = flowOut[:,:2,:,:]
-        F_1_0 = flowOut[:,2:,:,:]
+        F_0_1 = flowOut[:, :2, :, :]
+        F_1_0 = flowOut[:, 2:, :, :]
 
         for j in range(1, args.scale):
             t = float(j) / args.scale
@@ -102,16 +102,16 @@ if __name__ == "__main__":
                 g_I1_F_t_1 = flow_backwarp(I1, F_t_1)
 
             with torch.no_grad():
-                intrpOut = flow_interpolate( \
-                torch.cat((I0, I1, F_0_1, F_1_0, F_t_1, F_t_0, \
-                g_I1_F_t_1, g_I0_F_t_0), \
-                dim=1))
+                intrpOut = flow_interpolate(
+                    torch.cat((I0, I1, F_0_1, F_1_0, F_t_1, F_t_0,
+                               g_I1_F_t_1, g_I0_F_t_0),
+                              dim=1))
 
             F_t_0_f = intrpOut[:, :2, :, :] + F_t_0
             F_t_1_f = intrpOut[:, 2:4, :, :] + F_t_1
 
-            V_t_0   = torch.sigmoid(intrpOut[:, 4:5, :, :])
-            V_t_1   = 1 - V_t_0
+            V_t_0 = torch.sigmoid(intrpOut[:, 4:5, :, :])
+            V_t_1 = 1 - V_t_0
 
             with torch.no_grad():
                 g_I0_F_t_0_f = flow_backwarp(I0, F_t_0_f)
@@ -119,14 +119,18 @@ if __name__ == "__main__":
 
             wCoeff = [1 - t, t]
 
-            Ft_p = (wCoeff[0] * V_t_0 * g_I0_F_t_0_f + \
-                wCoeff[1] * V_t_1 * g_I1_F_t_1_f) / (wCoeff[0] * V_t_0 + wCoeff[1] * V_t_1)
+            Ft_p = (wCoeff[0] * V_t_0 * g_I0_F_t_0_f +
+                    wCoeff[1] * V_t_1 * g_I1_F_t_1_f) / (wCoeff[0] * V_t_0 + wCoeff[1] * V_t_1)
+            # pdb.set_trace()
+            # (Pdb) Ft_p.size()
+            # torch.Size([1, 3, 512, 960])
 
             del g_I0_F_t_0_f, g_I1_F_t_1_f, F_t_0_f, F_t_1_f, F_t_0, F_t_1, intrpOut, V_t_0, V_t_1, wCoeff
             torch.cuda.empty_cache()
 
             # Save intermediate frame
-            toimage(Ft_p[0].squeeze().cpu()).save("{}/{:06d}.png".format(args.output, count))
+            toimage(Ft_p.squeeze().cpu()).save(
+                "{}/{:06d}.png".format(args.output, count))
             count += 1
 
             del Ft_p
